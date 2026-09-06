@@ -1,0 +1,9 @@
+{
+  "name": "omp-auto-updater",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build --compile --windows-hide-console --minify src/main.ts --outfile dist/omp-auto-updater.exe",
+    "test": "bun test"
+  }
+}
