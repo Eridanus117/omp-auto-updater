@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun build --compile --windows-hide-console --minify src/main.ts --outfile dist/omp-auto-updater.exe",
+    "build": "bun build --compile --windows-hide-console --minify src/main.ts --outfile dist/omp-auto-updater.exe && go build -ldflags=-H=windowsgui -o dist/omp-auto-updater-launcher.exe launcher/main.go",
     "test": "bun test"
   }
 }

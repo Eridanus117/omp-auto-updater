@@ -2,7 +2,7 @@ import type { FileHandle } from "node:fs";
 import { access, appendFile, mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 const TASK_PREFIX = "OMP-Auto-Updater";
 const TASKS = [`${TASK_PREFIX}-Hourly`];
@@ -253,9 +253,15 @@ async function task(command: string, args: string[]): Promise<CommandResult> {
 
 async function installTasks(): Promise<void> {
 	if (!compiledExecutable()) {
-		throw new Error("计划任务必须指向编译后的 omp-auto-updater.exe；先运行 bun run build");
+		throw new Error("计划任务必须由编译后的 omp-auto-updater.exe 安装；先运行 bun run build");
 	}
-	const action = `"${process.execPath}" run`;
+	const launcher = join(dirname(process.execPath), "omp-auto-updater-launcher.exe");
+	try {
+		await access(launcher);
+	} catch {
+		throw new Error("缺少 omp-auto-updater-launcher.exe；先运行 bun run build");
+	}
+	const action = `"${launcher}" run`;
 	for (const taskName of TASKS) {
 		const args = [
 			"/Create",

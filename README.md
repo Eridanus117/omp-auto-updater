@@ -10,7 +10,7 @@
 - 空闲时执行 `omp update --force`
 - 使用 OMP 自己的 stable/canary 频道和安装、校验、回滚逻辑
 - 单实例锁、失败退避、状态和日志
-- 编译产物使用 `--windows-hide-console`，计划任务不套 `cmd.exe` 或 PowerShell
+- 计划任务直接指向 `omp-auto-updater-launcher.exe`；GUI 子系统启动器再以 `CREATE_NO_WINDOW` 调用更新器，避免弹出终端
 
 状态与日志：
 
@@ -21,7 +21,7 @@
 
 ## 构建
 
-需要 Bun：
+需要 Bun 和 Go：
 
 ```text
 bun run build
@@ -31,6 +31,7 @@ bun run build
 
 ```text
 dist\omp-auto-updater.exe
+dist\omp-auto-updater-launcher.exe
 ```
 
 ## 管理任务
