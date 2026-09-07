@@ -403,7 +403,9 @@ async function copyWrapperFiles(directory: string, sourceLauncher: string): Prom
 	if (resolvePath(process.execPath).toLowerCase() !== resolvePath(installedUpdater).toLowerCase()) {
 		await copyFile(process.execPath, installedUpdater);
 	}
-	await copyFile(sourceLauncher, installedLauncher);
+	if (resolvePath(sourceLauncher).toLowerCase() !== resolvePath(installedLauncher).toLowerCase()) {
+		await copyFile(sourceLauncher, installedLauncher);
+	}
 }
 
 async function installWrapper(): Promise<void> {
