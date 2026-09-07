@@ -118,7 +118,7 @@ function escapeCommandArgument(value: string): string {
 	return value.replace(/[&|<>()^]/g, "^$&").replaceAll("%", "^%");
 }
 
-function runCommand(command: string, args: string[], timeoutMs = updateTimeoutMs(), env = process.env): Promise<CommandResult> {
+function runCommand(command: string, args: string[], timeoutMs = updateTimeoutMs(), env = process.env, forwardOutput = false): Promise<CommandResult> {
 	const { promise, resolve, reject } = Promise.withResolvers<CommandResult>();
 	const [executable, executableArgs] = commandInvocation(command, args);
 	const child = spawn(executable, executableArgs, {
@@ -149,9 +149,11 @@ function runCommand(command: string, args: string[], timeoutMs = updateTimeoutMs
 	child.stderr.setEncoding("utf8");
 	child.stdout.on("data", chunk => {
 		stdout += chunk;
+		if (forwardOutput) process.stdout.write(chunk);
 	});
 	child.stderr.on("data", chunk => {
 		stderr += chunk;
+		if (forwardOutput) process.stderr.write(chunk);
 	});
 	child.once("error", error => finish(() => reject(error)));
 	child.once("close", code => finish(() => resolve({ code: code ?? 1, stdout, stderr })));
@@ -320,7 +322,7 @@ async function executeUpdate(checkOnly: boolean, interactive: boolean): Promise<
 		const before = await ompVersion(ompPath);
 		state.lastAttemptAt = nowIso();
 		const args = checkOnly ? ["update", "--check"] : ["update", "--force"];
-		const result = await runCommand(ompPath, args);
+		const result = await runCommand(ompPath, args, updateTimeoutMs(), process.env, interactive);
 		const after = await ompVersion(ompPath);
 		if (result.code !== 0) {
 			throw new Error((result.stderr || result.stdout || `exit ${result.code}`).trim());

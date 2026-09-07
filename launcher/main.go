@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -168,8 +167,8 @@ func runUpdater(path string) error {
 		"OMP_AUTO_UPDATE_WRAPPER_PID="+strconv.Itoa(os.Getpid()),
 		"OMP_AUTO_UPDATE_DEADLINE_AT_MS="+strconv.FormatInt(deadline.UnixMilli(), 10),
 	)
-	cmd.Stdout = io.Discard
-	cmd.Stderr = io.Discard
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		HideWindow:    true,
 		CreationFlags: 0x08000000,
