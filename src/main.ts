@@ -4,8 +4,7 @@ import { spawn } from "node:child_process";
 import { homedir } from "node:os";
 import { basename, dirname, extname, join, resolve as resolvePath } from "node:path";
 
-const TASK_PREFIX = "OMP-Auto-Updater";
-const TASKS = [`${TASK_PREFIX}-Hourly`];
+const LEGACY_TASKS = ["OMP-Auto-Updater-Hourly"];
 const RETRY_DELAYS_MS = [60 * 60_000, 6 * 60 * 60_000, 24 * 60 * 60_000];
 const MAX_RETRY_DELAY_MS = 7 * 24 * 60 * 60_000;
 const ACTIVE_RETRY_DELAY_MS = 30 * 60_000;
@@ -270,6 +269,18 @@ async function activeOmpProcessCount(): Promise<number> {
 		}).length;
 	return processCount + (sessionPid === undefined ? 0 : 1);
 }
+async function ompVersion(path: string): Promise<string | undefined> {
+	try {
+		const result = await runCommand(path, ["--version"]);
+		if (result.code !== 0) return undefined;
+		const output = `${result.stdout}\n${result.stderr}`.trim();
+		const version = output.match(/\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?/)?.[0];
+		const firstLine = output.split(/\r?\n/, 1)[0]?.trim();
+		return version ?? (firstLine || undefined);
+	} catch {
+		return undefined;
+	}
+}
 
 async function executeUpdate(checkOnly: boolean, interactive: boolean): Promise<UpdateResult> {
 	const state = await loadState();
@@ -341,8 +352,19 @@ function compiledExecutable(): boolean {
 	return basename(process.execPath).toLowerCase() === "omp-auto-updater.exe";
 }
 
-async function task(command: string, args: string[]): Promise<CommandResult> {
-	return runCommand("schtasks.exe", [command, ...args]);
+async function removeLegacyTasks(): Promise<void> {
+	for (const taskName of LEGACY_TASKS) {
+		const query = await runCommand("schtasks.exe", ["/Query", "/TN", taskName]);
+		if (query.code !== 0) {
+			const message = `${query.stdout}\n${query.stderr}`;
+			if (/cannot find|not found|找不到|找不到文件|系统找不到指定的文件/i.test(message)) continue;
+			throw new Error(message.trim() || `无法查询旧计划任务: ${taskName}`);
+		}
+		const result = await runCommand("schtasks.exe", ["/Delete", "/TN", taskName, "/F"]);
+		if (result.code !== 0) {
+			throw new Error(result.stderr || result.stdout || `无法删除旧计划任务: ${taskName}`);
+		}
+	}
 }
 
 async function updateUserPath(directory: string, include: boolean): Promise<void> {
@@ -370,9 +392,9 @@ async function updateUserPath(directory: string, include: boolean): Promise<void
 	if (result.code !== 0) throw new Error(result.stderr || result.stdout || "更新用户 PATH 失败");
 }
 
-async function installTasks(): Promise<void> {
+async function installWrapper(): Promise<void> {
 	if (!compiledExecutable()) {
-		throw new Error("计划任务必须由编译后的 omp-auto-updater.exe 安装；先运行 bun run build");
+		throw new Error("包装器必须由编译后的 omp-auto-updater.exe 安装；先运行 bun run build");
 	}
 	const sourceLauncher = join(dirname(process.execPath), "omp-auto-updater-launcher.exe");
 	try {
@@ -383,7 +405,7 @@ async function installTasks(): Promise<void> {
 	const state = await loadState();
 	const ompPath = await resolveOmpPath(state);
 	if (!ompPath) throw new Error("无法定位现有 omp.exe；可设置 OMP_AUTO_UPDATE_OMP_PATH");
-	await mkdir(wrapperDir, { recursive: true });
+	await removeLegacyTasks();
 	const installedUpdater = join(wrapperDir, "omp-auto-updater.exe");
 	const installedLauncher = join(wrapperDir, "omp.exe");
 	if (resolvePath(process.execPath).toLowerCase() !== resolvePath(installedUpdater).toLowerCase()) {
@@ -398,36 +420,18 @@ async function installTasks(): Promise<void> {
 	state.ompPath = ompPath;
 	state.wrapperDir = wrapperDir;
 	await saveState(state);
-	const action = `"${installedUpdater}" run`;
-	for (const taskName of TASKS) {
-		const args = [
-			"/Create",
-			"/TN",
-			taskName,
-			"/TR",
-			action,
-			"/SC",
-			"HOURLY",
-			"/MO",
-			"1",
-			"/F",
-		];
-		const result = await task(args[0], args.slice(1));
-		if (result.code !== 0) throw new Error(result.stderr || result.stdout || `创建任务失败: ${taskName}`);
-	}
-	await log(`installed tasks: ${TASKS.join(", ")}; wrapper: ${wrapperDir}; omp: ${ompPath}`);
+	await removeLegacyTasks();
+	await log(`installed wrapper: ${wrapperDir}; omp: ${ompPath}`);
 }
 
-async function uninstallTasks(): Promise<void> {
-	for (const taskName of TASKS) {
-		await task("/Delete", ["/TN", taskName, "/F"]);
-	}
+async function uninstallWrapper(): Promise<void> {
+	await removeLegacyTasks();
 	const state = await loadState();
 	await updateUserPath(state.wrapperDir ?? wrapperDir, false);
 	await rm(state.wrapperDir ?? wrapperDir, { recursive: true, force: true });
 	state.wrapperDir = undefined;
 	await saveState(state);
-	await log("uninstalled tasks and wrapper");
+	await log("uninstalled wrapper");
 }
 
 async function showStatus(): Promise<void> {
@@ -435,7 +439,6 @@ async function showStatus(): Promise<void> {
 	console.log(JSON.stringify({
 		stateDir,
 		state,
-		tasks: TASKS,
 		compiled: compiledExecutable(),
 		ompPath: await resolveOmpPath(state),
 		wrapperDir,
@@ -445,11 +448,11 @@ async function showStatus(): Promise<void> {
 async function main(): Promise<void> {
 	const [command = "run", flag] = process.argv.slice(2);
 	if (command === "install") {
-		await installTasks();
+		await installWrapper();
 		return;
 	}
 	if (command === "uninstall") {
-		await uninstallTasks();
+		await uninstallWrapper();
 		return;
 	}
 	if (command === "status") {
