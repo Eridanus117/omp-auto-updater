@@ -391,6 +391,20 @@ async function updateUserPath(directory: string, include: boolean): Promise<void
 	]);
 	if (result.code !== 0) throw new Error(result.stderr || result.stdout || "更新用户 PATH 失败");
 }
+function isFileBusy(error: unknown): boolean {
+	if (!(error instanceof Error) || !("code" in error)) return false;
+	const code = error.code;
+	return typeof code === "string" && ["EBUSY", "EACCES", "EPERM"].includes(code);
+}
+async function copyWrapperFiles(directory: string, sourceLauncher: string): Promise<void> {
+	await mkdir(directory, { recursive: true });
+	const installedUpdater = join(directory, "omp-auto-updater.exe");
+	const installedLauncher = join(directory, "omp.exe");
+	if (resolvePath(process.execPath).toLowerCase() !== resolvePath(installedUpdater).toLowerCase()) {
+		await copyFile(process.execPath, installedUpdater);
+	}
+	await copyFile(sourceLauncher, installedLauncher);
+}
 
 async function installWrapper(): Promise<void> {
 	if (!compiledExecutable()) {
@@ -406,29 +420,41 @@ async function installWrapper(): Promise<void> {
 	const ompPath = await resolveOmpPath(state);
 	if (!ompPath) throw new Error("无法定位现有 omp.exe；可设置 OMP_AUTO_UPDATE_OMP_PATH");
 	await removeLegacyTasks();
-	const installedUpdater = join(wrapperDir, "omp-auto-updater.exe");
-	const installedLauncher = join(wrapperDir, "omp.exe");
-	if (resolvePath(process.execPath).toLowerCase() !== resolvePath(installedUpdater).toLowerCase()) {
-		await copyFile(process.execPath, installedUpdater);
+	let installedDir = wrapperDir;
+	try {
+		await copyWrapperFiles(installedDir, sourceLauncher);
+	} catch (error) {
+		if (!isFileBusy(error)) {
+			throw error;
+		}
+		installedDir = join(stateDir, `bin-${Date.now()}-${process.pid}`);
+		await copyWrapperFiles(installedDir, sourceLauncher);
 	}
-	await copyFile(sourceLauncher, installedLauncher);
+	for (const directory of new Set([wrapperDir, state.wrapperDir])) {
+		if (directory && resolvePath(directory).toLowerCase() !== resolvePath(installedDir).toLowerCase()) {
+			await updateUserPath(directory, false);
+		}
+	}
+	await updateUserPath(installedDir, true);
 	const refresh = await runCommand(sourceLauncher, ["--refresh-environment"], updateTimeoutMs(), {
 		...process.env,
 		OMP_AUTO_UPDATE_INSTALL_HELPER: "1",
 	});
 	if (refresh.code !== 0) await log("environment refresh broadcast failed; reopen the terminal");
 	state.ompPath = ompPath;
-	state.wrapperDir = wrapperDir;
+	state.wrapperDir = installedDir;
 	await saveState(state);
-	await removeLegacyTasks();
-	await log(`installed wrapper: ${wrapperDir}; omp: ${ompPath}`);
+	await log(`installed wrapper: ${installedDir}; omp: ${ompPath}`);
 }
 
 async function uninstallWrapper(): Promise<void> {
 	await removeLegacyTasks();
 	const state = await loadState();
-	await updateUserPath(state.wrapperDir ?? wrapperDir, false);
-	await rm(state.wrapperDir ?? wrapperDir, { recursive: true, force: true });
+	for (const directory of new Set([wrapperDir, state.wrapperDir])) {
+		if (!directory) continue;
+		await updateUserPath(directory, false);
+		await rm(directory, { recursive: true, force: true });
+	}
 	state.wrapperDir = undefined;
 	await saveState(state);
 	await log("uninstalled wrapper");
@@ -441,7 +467,7 @@ async function showStatus(): Promise<void> {
 		state,
 		compiled: compiledExecutable(),
 		ompPath: await resolveOmpPath(state),
-		wrapperDir,
+		wrapperDir: state.wrapperDir ?? wrapperDir,
 	}, null, 2));
 }
 

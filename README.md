@@ -41,7 +41,7 @@ dist\omp-auto-updater-launcher.exe
 dist\omp-auto-updater.exe install
 ```
 
-`install` 只安装用户级 PATH 包装器，不创建后台计划任务。安装完成后请重新打开终端，让新的用户 PATH 生效。安装时会清理旧版本可能遗留的 `OMP-Auto-Updater-Hourly` 任务。
+`install` 只安装用户级 PATH 包装器，不创建后台计划任务。安装完成后请重新打开终端，让新的用户 PATH 生效。安装时会清理旧版本可能遗留的 `OMP-Auto-Updater-Hourly` 任务；如果当前包装器正在运行，会自动安装到新目录并切换 PATH，无需关闭当前会话。
 
 ```text
 dist\omp-auto-updater.exe uninstall
