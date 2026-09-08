@@ -55,13 +55,21 @@ type sessionLockState struct {
 }
 
 func run(args []string) int {
+	updater, err := resolveUpdaterPath()
+	if len(args) > 0 {
+		ompPath, err := resolveOmpPath(updater)
+		if err != nil {
+			return 1
+		}
+		return runOmp(ompPath, args)
+	}
+
 	session := acquireSessionLock()
 	if session == nil {
 		waitForSessionPreflight()
 	} else {
 		defer releaseSessionLock(session)
 	}
-	updater, err := resolveUpdaterPath()
 	if err == nil {
 		_ = runUpdater(updater)
 	}
