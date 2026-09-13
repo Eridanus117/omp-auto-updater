@@ -2,12 +2,12 @@
 
 ### Issue tracker
 
-Issues and specs live as GitHub issues, managed with `gh`. See `docs/agents/issue-tracker.md`.
+Issues 在本仓 GitHub Issues（`Eridanus117/omp-auto-updater`）里，`gh` 在仓内自动识别。See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-Use the canonical labels `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+使用默认五个标签：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-Use the single-context layout with root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+Single-context：根 `CONTEXT.md` + `docs/adr/`（按需生成）。See `docs/agents/domain.md`.
